@@ -132,7 +132,7 @@ class Categorical_Cross_Entropy(Loss):
         self.dinputs = -y_true / dvalues
         # Normalize the gradient to make the sum's magnitude invarient to the number of samples
         self.dinputs = self.dinputs / samples
-    
+
 class Activation_Softmax_Loss_CategoricalCrossentropy():
     def __init__(self):
         self.activation = Softmax()
@@ -166,8 +166,7 @@ class Optimizer_SDG:
     # Call once before any parameter updates
     def pre_update_params(self):
         if self.decay:
-            self.current_learning_rate = self.learning_rate * \
-            (1. / (1. + self.decay * self.iterations))
+            self.current_learning_rate = self.learning_rate * (1. / (1. + self.decay * self.iterations))
     
     def update_params(self, layer):
         # If we use momentum
@@ -182,14 +181,10 @@ class Optimizer_SDG:
             # Build weight updates with momentum - take previous
             # updates multiplied by retain factor and update with
             # current gradients
-            weight_updates = \
-                self.momentum * layer.weight_momentums - \
-                self.current_learning_rate * layer.dweights
+            weight_updates = self.momentum * layer.weight_momentums - self.current_learning_rate * layer.dweights
             layer.weight_momentums = weight_updates
             # Build bias updates
-            bias_updates = \
-                self.momentum * layer.bias_momentums - \
-                self.current_learning_rate * layer.dbiases
+            bias_updates = self.momentum * layer.bias_momentums - self.current_learning_rate * layer.dbiases
             layer.bias_momentums = bias_updates
 
         # Vanilla SGD updates (as before momentum update)
@@ -206,39 +201,60 @@ class Optimizer_SDG:
     def post_update_params(self):
         self.iterations += 1
 
+# Creating class for ADAM Optimizer
 class Optimizer_Adam():
+    # Initialize optimizer
     def __init__(self, learning_rate=0.001, decay=0., epsiolon=1e-7, beta_1=0.9, beta_2=0.999):
+        # Learning rate
         self.learning_rate = learning_rate
+        # Current learning rate
         self.current_learning_rate = learning_rate
+        # Learning rate decay
         self.decay = decay
+        # Prevents division by 0
         self.epsiolon = epsiolon
+        # Bias correction for momentum
         self.beta_1 = beta_1
+        # Bias correction for cache
         self.beta_2 = beta_2
+        # Number of interations
         self.iterations = 0
-        
+    
     def pre_update_params(self):
+        # If a decay value given when initalizing
         if self.decay:
+            # Calcaulte the adaptive learning rate with respect to the decay value and number of iterations 
             self.current_learning_rate = self.learning_rate * (1. / (1. + self.decay * self.iterations))
             
     def update_params(self, layer):
+        # If no cache array found create them filled with zeros
         if not hasattr(layer, 'weight_cache'):
             layer.weight_momentums = np.zeros_like(layer.weights)
             layer.weight_cache = np.zeros_like(layer.weights)
             layer.bias_momentums = np.zeros_like(layer.biases)
             layer.bias_cache = np.zeros_like(layer.biases)
         
+        # Update momentums with current gradients
         layer.weight_momentums = self.beta_1 * layer.weight_momentums + (1 - self.beta_1) * layer.dweights
         layer.bias_momentums = self.beta_1 * layer.bias_momentums + (1 - self.beta_1) * layer.dbiases
         
+        # Get corrected momentums
+        # beta_1 value gets bigger with each iteration
+        # This speeds up training initally
+        # As interations increase so does beta_1 meaning inital values are divided by a much smaller fraction causing values to
+        # Be significatly higher
         weight_momentums_corrected = layer.weight_momentums / (1 - self.beta_1 ** (self.iterations + 1))
         bias_momentums_corrected = layer.bias_momentums / (1 - self.beta_1 ** (self.iterations + 1))
         
+        # Update cache with squared current gradients
         layer.weight_cache = self.beta_2 * layer.weight_cache + (1 - self.beta_2) * layer.dweights**2
         layer.bias_cache = self.beta_2 * layer.bias_cache + (1 - self.beta_2) * layer.dbiases**2
         
+        # Same applys to beta_2 as beta_1. Values approch 1, as iterations increase
         weight_cache_corrected = layer.weight_cache / (1 - self.beta_2 ** (self.iterations + 1))
         bias_cache_corrected = layer.bias_cache / (1 - self.beta_2 ** (self.iterations + 1))
         
+        # Update layer weights and biases with normalization with square rooted cache
         layer.weights += -self.current_learning_rate * weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + self.epsiolon)
         layer.biases += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsiolon)
         
