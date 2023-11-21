@@ -30,6 +30,27 @@ class Dense_Layer:
          # Derivative with respect to inputs = weights
         self.dinputs = np.dot(dvalues, self.weights.T)
 
+# Creating class for dropout layer
+# Randomly disables neruons at a given rate to help prevent over fitting
+class Dropout_Layer:
+    # Initialize values
+    def __init__(self, rate):
+        # Rate is intended ratio of neruons in that layer that will be disabled on a forward pass
+        self.rate = 1 - rate
+    
+    # Forward pass
+    def forward(self, inputs):
+        # Store inputs
+        self.inputs = inputs
+        # Randomly selects neurons to be disabled
+        # divided by the dropout rate to scale data to mimic being the same size 
+        # if there was no dropout
+        self.binary_mask = np.random.binomial(1, self.rate, size=inputs.shape) / self.rate
+        self.output = inputs * self.binary_mask
+    
+    # Backward pass
+    def backward(self, dvalues):
+        self.dinputs = dvalues * self.binary_mask
 
 # Creating a class for the ReLU activation function
 class ReLU_Activation:
@@ -226,15 +247,14 @@ class Optimizer_Adam():
     def post_update_params(self):
         self.iterations += 1
         
-    
-        
-X, y = spiral_data(samples=100, classes = 3)
+X, y = spiral_data(samples=1000, classes = 3)
 
-dense1 = Dense_Layer(2, 64)
+dense1 = Dense_Layer(2, 512)
 activation1 = ReLU_Activation()
-dense2 = Dense_Layer(64, 3)
+dropout1 = Dropout_Layer(0.1)
+dense2 = Dense_Layer(512, 3)
 loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
-optimizer = Optimizer_Adam(learning_rate=0.05, decay=5e-7)
+optimizer = Optimizer_Adam(learning_rate=0.05, decay=5e-5)
 
 # Train in loop
 for epoch in range(10001):
@@ -243,9 +263,10 @@ for epoch in range(10001):
     # Perform a forward pass through activation function
     # takes the output of first dense layer here
     activation1.forward(dense1.output)
+    dropout1.forward(activation1.output)
     # Perform a forward pass through second Dense layer
     # takes outputs of activation function of first layer as inputs
-    dense2.forward(activation1.output)
+    dense2.forward(dropout1.output)
     # Perform a forward pass through the activation/loss function
     # takes the output of second dense layer here and returns loss
     loss = loss_activation.forward(dense2.output, y)
@@ -263,10 +284,26 @@ for epoch in range(10001):
     # Backward pass
     loss_activation.backward(loss_activation.output, y)
     dense2.backward(loss_activation.dinputs)
-    activation1.backward(dense2.dinputs)
+    dropout1.backward(dense2.dinputs)
+    activation1.backward(dropout1.dinputs)
     dense1.backward(activation1.dinputs)
     # Update weights and biases
     optimizer.pre_update_params()
     optimizer.update_params(dense1)
     optimizer.update_params(dense2)
     optimizer.post_update_params()
+
+X_test, y_test = spiral_data(samples=100, classes=3)
+
+dense1.forward(X_test)
+activation1.forward(dense1.output)
+dense2.forward(activation1.output)
+loss = loss_activation.forward(dense2.output, y_test)
+
+predictions = np.argmax(loss_activation.output, axis=1)
+if len(y_test.shape) == 2:
+    y_test = np.argmax(y_test, axis=1)
+accuracy = np.mean(predictions == y_test)
+
+print(f'validation, acc: {accuracy:.3f}, loss: {loss:.3f}')
+
